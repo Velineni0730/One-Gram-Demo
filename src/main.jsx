@@ -87,6 +87,7 @@ function App() {
   const [customer, setCustomer] = useState({ name: '', phone: '', email: '' });
   const [invoiceSearch, setInvoiceSearch] = useState('');
   const [activeInvoice, setActiveInvoice] = useState(null);
+  const [publicInvoice, setPublicInvoice] = useState(null);
   const [returnInvoice, setReturnInvoice] = useState('');
   const [returnItem, setReturnItem] = useState('');
   const [returnQty, setReturnQty] = useState('1');
@@ -109,7 +110,7 @@ function App() {
     if (!encoded) return;
     try {
       const shared = JSON.parse(decodeURIComponent(escape(atob(encoded))));
-      if (shared && shared.id && Array.isArray(shared.items)) setActiveInvoice(shared);
+      if (shared && shared.id && Array.isArray(shared.items)) setPublicInvoice(shared);
     } catch { /* Invalid or legacy invoice link; keep the app usable. */ }
   }, []);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 4500); return () => clearTimeout(t); }, [toast]);
@@ -448,6 +449,8 @@ function App() {
   const chartArea = chartPath + (chartPoints.length ? ` L ${chartPoints[chartPoints.length-1].x} 154 L ${chartPoints[0].x} 154 Z` : '');
   const nav = [ ['Dashboard', LayoutDashboard], ['New Sale', ReceiptText], ['Invoices', FileText], ['Returns', RotateCcw], ['Inventory', Package], ['Logs & Pricing', ClipboardList] ];
 
+  if (publicInvoice) return <PublicInvoice invoice={publicInvoice} shop={shop} onDownload={() => printInvoice(publicInvoice)} />;
+
   return <div className="app-shell">
     <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
       <div className="brand"><div className="brand-mark">D</div><div><b>DEMO</b><span>ONE GRAM JEWELLERY</span></div></div>
@@ -498,6 +501,25 @@ function App() {
     {activeInvoice && <div className="modal-backdrop" onClick={()=>setActiveInvoice(null)}><div className="invoice-modal" onClick={e=>e.stopPropagation()}><div className="modal-head"><div><div className="eyebrow">INVOICE PREVIEW</div><h2>{activeInvoice.id}</h2></div><button className="icon-action" onClick={()=>setActiveInvoice(null)}><X/></button></div><div className="invoice-paper"><div className="paper-brand"><div><h2>{shop.name}</h2><p>{shop.address}<br/>{shop.phone}</p></div><div className="paper-invoice"><b>INVOICE</b><span>{dateTime(activeInvoice.date)}</span></div></div><div className="paper-customer"><b>Bill to</b><input aria-label="Customer name" value={activeInvoice.customer.name||''} placeholder="Customer name" onChange={e=>{const v=e.target.value;setActiveInvoice(x=>({...x,customer:{...x.customer,name:v}}));setDb(d=>({...d,invoices:d.invoices.map(x=>x.id===activeInvoice.id?{...x,customer:{...x.customer,name:v}}:x)}));}}/><input aria-label="Customer phone" value={activeInvoice.customer.phone||''} placeholder="Phone" onChange={e=>{const v=e.target.value;setActiveInvoice(x=>({...x,customer:{...x.customer,phone:v}}));setDb(d=>({...d,invoices:d.invoices.map(x=>x.id===activeInvoice.id?{...x,customer:{...x.customer,phone:v}}:x)}));}}/><input aria-label="Customer email" value={activeInvoice.customer.email||''} placeholder="Email" onChange={e=>{const v=e.target.value;setActiveInvoice(x=>({...x,customer:{...x.customer,email:v}}));setDb(d=>({...d,invoices:d.invoices.map(x=>x.id===activeInvoice.id?{...x,customer:{...x.customer,email:v}}:x)}));}}/></div><table className="paper-table"><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>{activeInvoice.items.map((x,i)=><tr key={i}><td>{x.name}</td><td>{x.qty}</td><td>{currency(x.price)}</td><td>{currency(x.qty*x.price)}</td></tr>)}</tbody></table><div className="paper-totals"><div><span>Subtotal</span><b>{currency(activeInvoice.subtotal)}</b></div><div><span>Discount</span><b>− {currency(activeInvoice.discountAmount)}</b></div><div><span>GST</span><b>{currency(activeInvoice.gstAmount)}</b></div><div className="paper-grand"><span>Total</span><b>{currency(activeInvoice.total)}</b></div><div><span>Amount received</span><b>{currency(activeInvoice.amountReceived)}</b></div><div><span>Paid through</span><b>{activeInvoice.payment}</b></div></div><p className="paper-thanks">Thank you for shopping with us.</p></div><div className="modal-actions"><button className="secondary-btn" onClick={()=>printInvoice(activeInvoice)}><Printer size={16}/> Print / Download PDF</button><button className="secondary-btn" onClick={()=>shareWhatsApp(activeInvoice)}><MessageCircle size={16}/> WhatsApp</button><button className="primary-btn" onClick={()=>editAndEmailInvoice(activeInvoice)} disabled={mailSending}><Mail size={16}/> Email invoice</button></div></div></div>}
   </div>;
 }
+function PublicInvoice({ invoice, shop, onDownload }) {
+  const currency = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(Number(n || 0));
+  const dateTime = (d) => new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return <main className="public-invoice-page">
+    <header className="public-invoice-top"><div className="public-brand-mark">D</div><div><b>{shop.name}</b><small>OFFICIAL INVOICE</small></div><span className="public-secure-label">CUSTOMER COPY</span></header>
+    <section className="public-invoice-card">
+      <div className="public-invoice-heading"><div><span className="public-kicker">INVOICE DETAILS</span><h1>Thank you for your purchase</h1><p>Your invoice is ready to view and download.</p></div><span className="public-paid-pill">{invoice.status || 'PAID'}</span></div>
+      <div className="public-invoice-meta"><div><small>INVOICE NUMBER</small><b>{invoice.id}</b></div><div><small>DATE ISSUED</small><b>{dateTime(invoice.date)}</b></div></div>
+      <div className="public-billto"><small>BILLED TO</small><b>{invoice.customer?.name || 'Customer'}</b></div>
+      <div className="public-items-wrap"><table className="public-items"><thead><tr><th>Item</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>{invoice.items.map((item,i)=><tr key={`${item.productId || item.name}-${i}`}><td>{item.name}</td><td>{item.qty}</td><td>{currency(item.price)}</td><td>{currency(item.qty*item.price)}</td></tr>)}</tbody></table></div>
+      <div className="public-totals"><div><span>Subtotal</span><b>{currency(invoice.subtotal)}</b></div><div><span>Discount</span><b>− {currency(invoice.discountAmount)}</b></div><div><span>GST</span><b>{currency(invoice.gstAmount)}</b></div><div className="public-grand-total"><span>Total paid</span><strong>{currency(invoice.total)}</strong></div><div><span>Payment method</span><b>{invoice.payment || 'Not specified'}</b></div></div>
+      {(invoice.returnedItems || []).length > 0 && <div className="public-return-note">This invoice includes recorded return adjustments.</div>}
+      <button className="public-download-btn" onClick={onDownload}><Download size={18}/> Download / Print invoice</button>
+      <p className="public-thanks">Thank you for choosing {shop.name}.</p>
+    </section>
+    <footer className="public-footer">{shop.address} · {shop.phone}<br/>This is a customer invoice view. No account access is available here.</footer>
+  </main>;
+}
+
 function escapeHtml(s='') { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function Stat({icon:Icon,label,value,hint}) { return <div className="stat-card"><div className="stat-label">{label}<Icon size={18}/></div><strong>{value}</strong><small>{hint}</small></div>; }
 function CardTitle({title,subtitle,action,onAction}) { return <div className="card-title"><div><h3>{title}</h3>{subtitle&&<p>{subtitle}</p>}</div>{action&&<button className="text-action" onClick={onAction}>{action} <ArrowUpRight size={14}/></button>}</div>; }
